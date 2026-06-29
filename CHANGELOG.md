@@ -1,3 +1,11 @@
+## 0.14.9-trackunit.1
+
+Trackunit internal fork.
+
+BUG FIXES:
+
+* Re-introduce client-side rate limiting and HTTP 429 retry/backoff (originally added upstream in #162, reverted in #164). Implemented as an `http.RoundTripper` so it covers both the `firehydrant-go-sdk` client and the legacy `sling` client, fixing `Error reading teams: ... Status 429 {"error":"rate limit exceeded"}` during plan/refresh. The request window is tunable via `FIREHYDRANT_RATE_LIMIT_SECONDS`.
+
 ## 0.14.9
 
 BUG FIXES:

@@ -42,6 +42,8 @@ type APIClient struct {
 	token           string
 	userAgentSuffix string
 
+	httpClient *http.Client
+
 	Sdk *fhsdk.FireHydrant
 }
 
@@ -129,9 +131,12 @@ func NewRestClient(token string, opts ...OptFunc) (*APIClient, error) {
 		}
 	}
 
-	//init speakeasy client also
-	httpClient := &http.Client{Transport: &transportWithUserAgent{
-		userAgent: fmt.Sprintf("%s (%s)/%s", UserAgentPrefix, GetBuildInfo().String(), c.userAgentSuffix)},
+	// Wrap the user-agent transport with client-side rate limiting and 429
+	// retries so both the speakeasy SDK and the legacy sling client are throttled.
+	c.httpClient = &http.Client{
+		Transport: newRateLimitedTransport(&transportWithUserAgent{
+			userAgent: fmt.Sprintf("%s (%s)/%s", UserAgentPrefix, GetBuildInfo().String(), c.userAgentSuffix),
+		}),
 	}
 
 	// speakeasy sdk will only work with v1 of the api and adds this to each path automatically.  The server URL then assumes no path information
@@ -139,7 +144,7 @@ func NewRestClient(token string, opts ...OptFunc) (*APIClient, error) {
 	firehydrantServerURL := strings.TrimSuffix(firehydrantBaseURL, "v1/")
 
 	c.Sdk = fhsdk.New(
-		fhsdk.WithClient(httpClient),
+		fhsdk.WithClient(c.httpClient),
 		fhsdk.WithServerURL(firehydrantServerURL),
 		fhsdk.WithSecurity(components.Security{
 			APIKey: token,
@@ -153,6 +158,7 @@ func (c *APIClient) client() *sling.Sling {
 	bi := GetBuildInfo()
 
 	return sling.New().Base(c.baseURL).
+		Doer(c.httpClient).
 		Set(
 			"User-Agent",
 			fmt.Sprintf(
